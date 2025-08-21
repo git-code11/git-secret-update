@@ -1,0 +1,6 @@
+.envrc
+.env
+.env.*
+*.exe
+build
+git-secret-update
