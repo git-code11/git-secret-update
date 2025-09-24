@@ -12,10 +12,10 @@ import (
 )
 
 type State struct {
-	key    string
-	value  []byte
-	file   []byte
-	secret bool
+	Key    string
+	Value  string
+	File   string
+	Secret bool
 }
 
 type githubStateUpdateOpts struct {
@@ -41,24 +41,24 @@ func NewGithubStateUpdate(opts *githubStateUpdateOpts) *GithubStateUpdate {
 func (g *GithubStateUpdate) Execute() error {
 	for _, state := range g.states {
 		var value string
-		if state.value != nil {
-			value = string(state.value)
-		} else if state.file != nil {
-			out, err := os.ReadFile(string(state.file))
+		if state.Value != "" {
+			value = state.Value
+		} else if state.File != "" {
+			out, err := os.ReadFile(state.File)
 			if err != nil {
 				return err
 			}
 			value = string(out)
 		}
 
-		if state.secret {
-			fmt.Printf("Updating Environ Secret (%s)...\n", state.key)
-			if err := g.client.UpdateSecret(state.key, value); err != nil {
+		if state.Secret {
+			fmt.Printf("Updating Environ Secret (%s)...\n", state.Key)
+			if err := g.client.UpdateSecret(state.Key, value); err != nil {
 				return err
 			}
 		} else {
-			fmt.Printf("Updating Environ Variable (%s)...\n", state.key)
-			if err := g.client.UpdateVariable(state.key, value); err != nil {
+			fmt.Printf("Updating Environ Variable (%s)...\n", state.Key)
+			if err := g.client.UpdateVariable(state.Key, value); err != nil {
 				return err
 			}
 		}
