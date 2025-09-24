@@ -12,23 +12,23 @@ import (
 	"golang.org/x/crypto/nacl/box"
 )
 
-type updateGithubEnv struct {
+type UpdateGithubEnv struct {
 	client *github.Client
 	repoPk *github.PublicKey
 	repo   string
 	owner  string
 }
 
-func NewUpdateGithubEnv(accessKey string, owner string, repo string) *updateGithubEnv {
+func NewUpdateGithubEnv(accessKey string, owner string, repo string) *UpdateGithubEnv {
 	client := github.NewClient(nil).WithAuthToken(accessKey)
-	return &updateGithubEnv{
+	return &UpdateGithubEnv{
 		client: client,
 		owner:  owner,
 		repo:   repo,
 	}
 }
 
-func (u *updateGithubEnv) UpdateSecret(key string, value string) error {
+func (u *UpdateGithubEnv) UpdateSecret(key string, value string) error {
 	ctx := context.Background()
 	encryptedValue, err := u.EncryptUsingRepoPk(value)
 	if err != nil {
@@ -43,7 +43,7 @@ func (u *updateGithubEnv) UpdateSecret(key string, value string) error {
 	return err
 }
 
-func (u *updateGithubEnv) GetRepoPk() error {
+func (u *UpdateGithubEnv) GetRepoPk() error {
 	ctx := context.Background()
 	pk, _, err := u.client.Actions.GetRepoPublicKey(ctx, u.owner, u.repo)
 	if err == nil {
@@ -52,7 +52,7 @@ func (u *updateGithubEnv) GetRepoPk() error {
 	return err
 }
 
-func (u *updateGithubEnv) EncryptUsingRepoPk(value string) (string, error) {
+func (u *UpdateGithubEnv) EncryptUsingRepoPk(value string) (string, error) {
 	var encryptedString string
 
 	if u.repoPk == nil {
@@ -77,7 +77,7 @@ func (u *updateGithubEnv) EncryptUsingRepoPk(value string) (string, error) {
 	return encryptedString, nil
 }
 
-func (u *updateGithubEnv) UpdateVariable(key string, value string) error {
+func (u *UpdateGithubEnv) UpdateVariable(key string, value string) error {
 	ctx := context.Background()
 	exists, err := u.HasVariable(key)
 	if err != nil {
@@ -97,13 +97,13 @@ func (u *updateGithubEnv) UpdateVariable(key string, value string) error {
 	return err
 }
 
-func (u *updateGithubEnv) GetVariable(key string) (string, error) {
+func (u *UpdateGithubEnv) GetVariable(key string) (string, error) {
 	ctx := context.Background()
 	result, _, err := u.client.Actions.GetRepoVariable(ctx, u.owner, u.repo, key)
 	return result.Value, err
 }
 
-func (u *updateGithubEnv) HasVariable(key string) (bool, error) {
+func (u *UpdateGithubEnv) HasVariable(key string) (bool, error) {
 	var exists bool
 	ctx := context.Background()
 	result, _, err := u.client.Actions.ListRepoVariables(ctx, u.owner, u.repo, nil)

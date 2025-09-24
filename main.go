@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,22 +11,72 @@ import (
 	"strings"
 )
 
+type State struct {
+	key    string
+	value  []byte
+	file   []byte
+	secret bool
+}
+
+type githubStateUpdateOpts struct {
+	RepoID    string
+	OwnerID   string
+	AccessKey string
+	States    []State
+}
+
+type GithubStateUpdate struct {
+	client *UpdateGithubEnv
+	states []State
+}
+
+func NewGithubStateUpdate(opts *githubStateUpdateOpts) *GithubStateUpdate {
+	client := NewUpdateGithubEnv(opts.AccessKey, opts.OwnerID, opts.RepoID)
+	return &GithubStateUpdate{
+		client: client,
+		states: opts.States,
+	}
+}
+
+func (g *GithubStateUpdate) Execute() error {
+	for _, state := range g.states {
+		var value string
+		if state.value != nil {
+			value = string(state.value)
+		} else if state.file != nil {
+			out, err := os.ReadFile(string(state.file))
+			if err != nil {
+				return err
+			}
+			value = string(out)
+		}
+
+		if state.secret {
+			fmt.Printf("Updating Environ Secret (%s)...\n", state.key)
+			if err := g.client.UpdateSecret(state.key, value); err != nil {
+				return err
+			}
+		} else {
+			fmt.Printf("Updating Environ Variable (%s)...\n", state.key)
+			if err := g.client.UpdateVariable(state.key, value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 var repoID string
 var ownerID string
 var accessKey string
-var envKey string
-var envFile string
-var envValue string
-var isSecret bool
-var defaultKey = "ENV_CONTENT"
+var stateFile string
+var states []State
 
 func init() {
 	flag.StringVar(&repoID, "repo", os.Getenv("GITHUB_ID"), "Owner/Repository ID")
 	flag.StringVar(&accessKey, "key", os.Getenv("GITHUB_TOKEN"), "Access Token")
-	flag.StringVar(&envKey, "env-key", defaultKey, "Env Key")
-	flag.StringVar(&envValue, "env-value", "", "Env Value")
-	flag.StringVar(&envFile, "env-file", "", "Env File")
-	flag.BoolVar(&isSecret, "secret", false, "Secret Env")
+	// TODO: Add Structure of state file
+	flag.StringVar(&stateFile, "file", "", "State File")
 }
 
 func promptOnEmpty(prompt string, val *string) error {
@@ -37,7 +88,7 @@ func promptOnEmpty(prompt string, val *string) error {
 	return nil
 }
 
-func Parse() {
+func parse() {
 	var err error
 	defer func() {
 		if err != nil {
@@ -68,48 +119,37 @@ func Parse() {
 	ownerID = ids[0]
 	repoID = ids[1]
 
-	fmt.Printf("Repository: %s EnvKey: %s\n", repoID, envKey)
+	fmt.Printf("Repository: %s\n", repoID)
 
-	// Check EnvValue from local environment
-	if envValue == "" {
-		envValue = os.Getenv(envKey)
-	}
-
-	// Check EnvValue from .env
-	if envValue == "" && envFile != "" {
-		out, err := os.ReadFile(envFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		envValue = string(out)
-	}
-
-	// Read Env from terminal
-	if envValue == "" {
+	// Get State content
+	var out []byte
+	if stateFile == "" {
 		fmt.Println("Paste Env Value here: Use <CTRL-D> to close")
-		out, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			log.Fatal(err)
-		}
-		envValue = string(out)
+		out, err = io.ReadAll(os.Stdin)
+	} else {
+		out, err = os.ReadFile(stateFile)
+	}
+
+	if err != nil {
+		return
+	}
+
+	if err = json.Unmarshal(out, &states); err != nil {
+		return
 	}
 }
 
 func main() {
-	Parse()
+	parse()
 
-	client := NewUpdateGithubEnv(accessKey, ownerID, repoID)
-	var err error
-	if isSecret {
-		fmt.Println("Updating Environ Secret...")
-		err = client.UpdateSecret(envKey, envValue)
-	} else {
-		fmt.Println("Updating Environ Variable...")
-		err = client.UpdateVariable(envKey, envValue)
-	}
-	if err != nil {
+	client := NewGithubStateUpdate(&githubStateUpdateOpts{
+		RepoID:    repoID,
+		OwnerID:   ownerID,
+		AccessKey: accessKey,
+		States:    states,
+	})
+
+	if err := client.Execute(); err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Printf("Updated Value with: \n %s: %s\n", envKey, envValue)
 }
